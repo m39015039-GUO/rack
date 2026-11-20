@@ -135,7 +135,9 @@ tr.bad td{background:var(--badS)}
 <section id="v-kit" class="card hide">
   <h2>齊套檢查</h2>
   <p class="hint" style="margin-top:0">輸入工單，或掃工令區標籤、來料標籤。比對料況表的「均華已領量」和料架上的實際數量，找出帳上有、架上找不到的料。</p>
-  <div class="row" style="margin-top:0"><input class="t" id="kq" placeholder="工單，例如 C026S0618-G30" list="woDl" style="flex:1 1 240px"><button class="b p" id="kGo">查詢</button><button class="b" id="kScan">掃描</button></div>
+  <div class="row" style="margin-top:0"><select class="t mSel" id="km" style="flex:1 1 260px"></select><button class="b p" id="kmGo">查詢這台機台</button></div>
+  <label class="hint" style="display:block"><input type="checkbox" id="showPast"> 也列出已過出機日的機台</label>
+  <div class="row"><input class="t" id="kq" placeholder="或輸入單一工單，例如 C026S0618-G30" list="woDl" style="flex:1 1 240px"><button class="b p" id="kGo">查詢</button><button class="b" id="kScan">掃描</button></div>
   <datalist id="woDl"></datalist>
   <div id="kitCam" style="margin-top:10px"></div>
   <div id="kitOut"></div>
@@ -173,14 +175,21 @@ tr.bad td{background:var(--badS)}
     <div class="msg info hide" id="bomMsg"></div>
   </div>
   <div class="card">
-    <h2>2. 從料況表建立工令區</h2>
-    <p class="hint" style="margin-top:0">輸入工單開頭篩選（例如 C026S0618），勾選後建立。預設只勾均華已經發料的工單。</p>
-    <div class="row" style="margin-top:0"><input class="t" id="wf" placeholder="篩選工單，例如 C026S0618" style="flex:1 1 220px"><button class="b" id="wLoad">讀取工單清單</button></div>
+    <h2>2. 匯入訂單明細</h2>
+    <p class="hint" style="margin-top:0">選擇雅雲每週寄的「機台編號及出機日-MMDD'26.xls」，系統只讀〈均華訂單-敬東〉分頁。<span id="ordInfo"></span></p>
+    <div class="row"><label class="b p">選擇訂單明細檔案<input type="file" id="ordFile" accept=".xls,.xlsx" hidden></label></div>
+    <div class="msg info hide" id="ordMsg"></div>
+  </div>
+  <div class="card">
+    <h2>3. 建立工令區</h2>
+    <p class="hint" style="margin-top:0">選一台機台，或輸入工單開頭篩選（例如 C026S0618），再按「讀取工單清單」。預設只勾均華已經發料的工單。</p>
+    <div class="row" style="margin-top:0"><select class="t mSel" id="wm" style="flex:1 1 260px"></select></div>
+    <div class="row"><input class="t" id="wf" placeholder="或輸入工單開頭，例如 C026S0618" style="flex:1 1 220px"><button class="b" id="wLoad">讀取工單清單</button></div>
     <div class="list hide" id="wList"></div>
     <div class="row"><button class="b" id="wAll">全選／全不選</button><button class="b p" id="wMake">建立勾選的工令區</button></div>
   </div>
   <div class="card">
-    <h2>3. 其他區域與台車</h2>
+    <h2>4. 其他區域</h2>
     <div class="row" style="margin-top:0">
       <input class="t" id="nCode" placeholder="條碼，例如 共用區用 COMMON-01" style="width:14em">
       <select class="t" id="nType"><option value="zone">工令區</option><option value="common">共用</option></select>
@@ -214,7 +223,7 @@ const toD=t=>new Date(String(t).replace(' ','T')+'+08:00');
 const fmt=t=>{const d=toD(t);if(isNaN(d))return t;const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`};
 const SEP='\u0001';
 const LT={zone:'工令區',common:'共用',cart:'台車',recv:'待上架'};
-let me=null,db={locs:[],recs:[],ret:[]},busy=false,lastSync=0;
+let me=null,db={locs:[],recs:[],ret:[],orders:[]},busy=false,lastSync=0;
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const apiReady=()=>/^https:\/\/script\.google\.com\//.test(API_URL);
 
@@ -224,7 +233,7 @@ async function post(body){
   const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});
   return r.json();
 }
-function apply(j){if(j.locs){db.locs=j.locs;db.recs=j.recs;db.ret=j.ret;db.bomFile=j.bomFile;db.bomTime=j.bomTime;lastSync=Date.now()}if(j.me)me.role=j.me.role}
+function apply(j){if(j.locs){db.locs=j.locs;db.recs=j.recs;db.ret=j.ret;db.bomFile=j.bomFile;db.bomTime=j.bomTime;db.orders=j.orders||[];db.ordFile=j.ordFile;db.ordTime=j.ordTime;lastSync=Date.now()}if(j.me)me.role=j.me.role}
 async function api(act,extra={}){
   const j=await post({act,token:me.token,...extra});
   if(j.auth===false){logout('登入已過期，請重新登入');throw new Error(j.err)}
@@ -384,23 +393,31 @@ $('#photo').addEventListener('change',async e=>{const f=e.target.files[0];e.targ
   try{const t=await new Html5Qrcode('phtmp').scanFile(f,false);camTarget='scan';onCode(t)}catch(x){err('照片裡讀不到條碼，請靠近一點、對準後再拍')}tmp.remove()});
 
 // ===== 齊套檢查 =====
-async function kit(){
-  const w=$('#kq').value.trim().toUpperCase();if(!w)return;const o=$('#kitOut');o.innerHTML='<div class="msg info">查詢中…</div>';
-  try{const j=await api('kit',{wo:w});const k=j.kit;
-    if(!k.found&&!k.rows.length){o.innerHTML=`<div class="msg bad">料況表裡找不到工單 ${esc(w)}。請確認工單號碼，或請管理人員匯入最新料況表（目前：${esc(k.bomFile||'尚未匯入')}）。</div>`;return}
+async function kit(mach){
+  const w=$('#kq').value.trim().toUpperCase();const M=mach?db.orders.find(x=>x.seq===mach):null;if(!w&&!M)return;const o=$('#kitOut');o.innerHTML='<div class="msg info">查詢中…</div>';
+  try{const j=await api('kit',M?{bases:M.wos}:{wo:w});const k=j.kit;
+    if(!k.found&&!k.rows.length){o.innerHTML=`<div class="msg bad">料況表裡找不到 ${esc(M?machLabel(M):w)} 的工單。請確認工單號碼，或請管理人員匯入最新料況表（目前：${esc(k.bomFile||'尚未匯入')}）。</div>`;return}
     const R=k.rows.sort((a,b)=>b.diff-a.diff||a.part.localeCompare(b.part));
     const iss=R.filter(r=>r.issued>0).length,miss=R.filter(r=>r.diff>0).length,un=R.filter(r=>r.unissued>0).length,ex=R.filter(r=>!r.inBom).length;
-    o.innerHTML=`<p class="hint">料況表：${esc(k.bomFile||'—')}｜工令區：${k.zones.length?k.zones.map(esc).join('、'):'<span class="tag o">尚未建立</span>'}</p>
+    o.innerHTML=(M?`<div class="target">${esc(M.site)}（${esc(M.jd)}／${esc(M.main)}）<b>出機日 ${esc(M.ship||'未定')}</b>工單：${M.wos.map(esc).join('、')}</div>`:'')+`<p class="hint">料況表：${esc(k.bomFile||'—')}｜工令區：${k.zones.length?k.zones.map(esc).join('、'):'<span class="tag o">尚未建立</span>'}</p>
     <div class="kpis"><div class="kpi"><b>${R.filter(r=>r.inBom).length}</b><span>料況表品項</span></div><div class="kpi"><b>${iss}</b><span>均華已發料</span></div>
     <div class="kpi ${miss?'bad':'ok'}"><b>${miss}</b><span>已發但架上找不到</span></div><div class="kpi"><b>${un}</b><span>均華還沒發（缺料）</span></div>${ex?`<div class="kpi"><b>${ex}</b><span>架上有但不在料況</span></div>`:''}</div>
     <label><input type="checkbox" id="kOnly" checked> 只看「已發但架上找不到」</label>
-    <div class="scroll" style="margin-top:8px"><table class="stack"><thead><tr><th>料號</th><th>說明</th><th class="n">均華已領</th><th class="n">架上</th><th class="n">待上架</th><th class="n">已領用</th><th class="n">被挪走</th><th class="n">借入</th><th class="n">差異</th><th class="n">未發</th></tr></thead>
-    <tbody>${R.map(r=>`<tr class="${r.diff>0?'bad':''}" data-d="${r.diff>0?1:0}"><td>${esc(r.part)}${r.inBom?'':' <span class="tag y">不在料況</span>'}</td><td>${esc(r.desc)}</td><td class="n">${r.issued}</td><td class="n">${r.shelf}</td><td class="n">${r.pending||''}</td><td class="n">${r.used||''}</td><td class="n">${r.lent||''}</td><td class="n">${r.borrowed||''}</td><td class="n"><b>${r.diff}</b></td><td class="n">${r.unissued||''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="scroll" style="margin-top:8px"><table class="stack"><thead><tr><th>工單</th><th>料號</th><th>說明</th><th class="n">均華已領</th><th class="n">架上</th><th class="n">待上架</th><th class="n">已領用</th><th class="n">被挪走</th><th class="n">借入</th><th class="n">差異</th><th class="n">未發</th></tr></thead>
+    <tbody>${R.map(r=>`<tr class="${r.diff>0?'bad':''}" data-d="${r.diff>0?1:0}"><td>${esc(r.wo)}</td><td>${esc(r.part)}${r.inBom?'':' <span class="tag y">不在料況</span>'}</td><td>${esc(r.desc)}</td><td class="n">${r.issued}</td><td class="n">${r.shelf}</td><td class="n">${r.pending||''}</td><td class="n">${r.used||''}</td><td class="n">${r.lent||''}</td><td class="n">${r.borrowed||''}</td><td class="n"><b>${r.diff}</b></td><td class="n">${r.unissued||''}</td></tr>`).join('')}</tbody></table></div>
     <p class="hint">差異 = 均華已領 −（架上＋待上架＋已領用＋被挪走−借入）。差異大於 0 代表均華已經發給我們，但系統裡找不到，可能是還沒掃上架、放錯區或遺失。剛開始使用時，請先把現有的料全部掃一次上架。</p>`;
     const f=()=>{const on=$('#kOnly').checked;o.querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('hide',on&&tr.dataset.d!=='1'))};$('#kOnly').addEventListener('change',f);f();
   }catch(e){o.innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
 }
-$('#kGo').addEventListener('click',kit);$('#kq').addEventListener('keydown',e=>{if(e.key==='Enter')kit()});
+$('#kGo').addEventListener('click',()=>kit());
+$('#kmGo').addEventListener('click',()=>{const v=$('#km').value;if(v){$('#kq').value='';kit(v)}});
+$('#showPast').addEventListener('change',renderMach);
+const today=()=>new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
+const machLabel=m=>`${m.ship||'未定'}｜${m.site}｜${m.jd}｜${m.main}`;
+function renderMach(){const past=$('#showPast').checked,t=today();
+  const L=(db.orders||[]).filter(m=>past||!/^\d{4}-\d{2}-\d{2}$/.test(m.ship)||m.ship>=t).sort((a,b)=>{const k=m=>/^\d{4}-/.test(m.ship)?m.ship:'9'+m.ship;return k(a).localeCompare(k(b))});
+  const opt=`<option value="">選擇機台（依出機日排序，共 ${L.length} 台）</option>`+L.map(m=>`<option value="${esc(m.seq)}">${esc(machLabel(m))}</option>`).join('');
+  document.querySelectorAll('.mSel').forEach(s=>{const v=s.value;s.innerHTML=opt;s.value=v})}$('#kq').addEventListener('keydown',e=>{if(e.key==='Enter')kit()});
 $('#kScan').addEventListener('click',()=>cam&&camTarget==='kit'?stopCam():startCam('kit'));
 function renderWoDl(){$('#woDl').innerHTML=db.locs.filter(l=>l.type==='zone').map(l=>`<option value="${esc(l.code)}">`).join('')}
 
@@ -438,6 +455,7 @@ $('#logT').addEventListener('click',e=>{const b=e.target.dataset.undo;if(b)undo(
 function locMsg(c,t){const m=$('#locMsg');m.className='msg '+c;m.textContent=t}
 function renderLocs(){if(me?.role!=='admin')return;const m=stock(),f=$('#lf').value.trim().toUpperCase();
   $('#bomInfo').textContent=db.bomFile?`目前：${db.bomFile}，匯入於 ${db.bomTime}`:'目前尚未匯入。';
+  $('#ordInfo').textContent=db.ordFile?`目前：${db.ordFile}，匯入於 ${db.ordTime}，共 ${db.orders.length} 台`:'目前尚未匯入。';
   const L=db.locs.map((l,i)=>({l,i})).filter(x=>x.l.type!=='recv').filter(x=>!f||x.l.code.includes(f)||(x.l.note||'').toUpperCase().includes(f));
   $('#locT').innerHTML=L.slice(0,400).map(({l,i})=>`<tr><td><input type="checkbox" data-sel="${i}" aria-label="選取 ${esc(l.code)}"></td><td><b>${esc(l.code)}</b></td><td>${LT[l.type]}</td><td><input class="t" style="width:100%;min-height:38px" data-note="${esc(l.code)}" value="${esc(l.note)}"></td><td>${itemsAt(m,l.code).length}</td><td><button class="b s r" data-del="${esc(l.code)}">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚未建立區域</td></tr>'}
 $('#lf').addEventListener('input',renderLocs);
@@ -454,9 +472,11 @@ let wos=[];
 $('#wLoad').addEventListener('click',async()=>{const l=$('#wList');l.classList.remove('hide');l.innerHTML='<div class="hint" style="padding:10px">讀取中…</div>';
   try{const j=await api('woList');wos=j.wos;renderWos()}catch(x){l.innerHTML=`<div class="msg bad">${esc(x.message)}</div>`}});
 function renderWos(){const f=$('#wf').value.trim().toUpperCase(),have=new Set(db.locs.map(l=>l.code));
-  const L=wos.filter(w=>!f||w.wo.includes(f));
+  const M=db.orders.find(x=>x.seq===$('#wm').value);
+  const L=wos.filter(w=>(!f||w.wo.includes(f))&&(!M||M.wos.some(b=>w.wo===b||w.wo.startsWith(b+'-'))));
   $('#wList').innerHTML=L.slice(0,600).map(w=>`<label><input type="checkbox" data-wo="${esc(w.wo)}" ${have.has(w.wo)?'disabled':w.issued?'checked':''}><b>${esc(w.wo)}</b><span class="hint" style="margin:0">${w.items} 項，已發 ${w.issued} 項${have.has(w.wo)?'（已建立）':''}</span></label>`).join('')||'<div class="hint" style="padding:10px">沒有符合的工單</div>'}
 $('#wf').addEventListener('input',()=>{if(wos.length)renderWos()});
+$('#wm').addEventListener('change',()=>{if(wos.length)renderWos()});
 $('#wAll').addEventListener('click',()=>{const cb=[...document.querySelectorAll('[data-wo]:not(:disabled)')];const all=cb.every(c=>c.checked);cb.forEach(c=>c.checked=!all)});
 $('#wMake').addEventListener('click',()=>{const s=[...document.querySelectorAll('[data-wo]:checked:not(:disabled)')].map(c=>({code:c.dataset.wo,type:'zone'}));if(!s.length)return locMsg('bad','請先讀取並勾選工單');addLocs(s).then(()=>{if(wos.length)renderWos()})});
 
@@ -476,6 +496,22 @@ $('#bomFile').addEventListener('change',async e=>{const f=e.target.files[0];e.ta
     await api('bomStart',{file:f.name});const N=2000;
     for(let i=0;i<rows.length;i+=N){await api('bomChunk',{rows:rows.slice(i,i+N)});bar.firstElementChild.style.width=Math.round(10+90*Math.min(1,(i+N)/rows.length))+'%';m.textContent=`上傳中… ${Math.min(i+N,rows.length)} / ${rows.length}`}
     await api('bomEnd',{file:f.name});m.className='msg ok';m.textContent=`匯入完成：${f.name}，共 ${rows.length} 筆、${new Set(rows.map(r=>r[0])).size} 張工單。`;refresh();
+  }catch(x){m.className='msg bad';m.textContent='匯入失敗：'+x.message}});
+$('#ordFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const m=$('#ordMsg');m.className='msg info';m.textContent='讀取中…';
+  try{await loadXLSX();const wb=XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array'});
+    const n=wb.SheetNames.find(s=>s.includes('均華訂單')&&!s.includes('東捷'));if(!n)throw new Error('找不到〈均華訂單-敬東〉分頁');
+    const a=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''});
+    const hi=a.findIndex(r=>r.some(c=>String(c).replace(/\s/g,'')==='項次'));if(hi<0)throw new Error('找不到「項次」表頭');
+    const H=a[hi].map(h=>String(h).replace(/\s/g,'')),ix=k=>H.indexOf(k);
+    const miss=['項次','訂單號碼','下單客戶','出機客戶','敬東工單','均華工單(主)','敬東出機日'].filter(k=>ix(k)<0);if(miss.length)throw new Error('缺少欄位：'+miss.join('、'));
+    const woCols=H.map((h,i)=>(h.includes('工單')&&h!=='敬東工單')||h==='KITS'?i:-1).filter(i=>i>=0);
+    const re=/(?<![A-Z0-9])[A-Z]\d{3}[A-Z0-9]{5}(?![A-Z0-9])/g,s=(r,k)=>ix(k)<0?'':String(r[ix(k)]??'').trim();
+    const rows=[];for(let i=hi+1;i<a.length;i++){const r=a[i];const seq=s(r,'項次');if(!/^\d+$/.test(seq))continue;
+      const ws=[...new Set(woCols.flatMap(c=>String(r[c]).toUpperCase().match(re)||[]))];
+      const sd=s(r,'敬東出機日'),dm=sd.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      rows.push([seq,s(r,'訂單號碼'),s(r,'下單客戶'),s(r,'出機客戶'),s(r,'敬東工單'),(s(r,'均華工單(主)').toUpperCase().match(re)||[''])[0],dm?`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`:sd,ws.join(','),s(r,'設備類型'),s(r,'備註')])}
+    if(!rows.length)throw new Error('分頁裡沒有讀到機台資料');
+    await api('ordImport',{file:f.name,rows});m.className='msg ok';m.textContent=`匯入完成：${f.name}，共 ${rows.length} 台機台。`;refresh();
   }catch(x){m.className='msg bad';m.textContent='匯入失敗：'+x.message}});
 
 // 標籤：QR Code + Code128
@@ -499,7 +535,7 @@ $('#expDebt').addEventListener('click',()=>dl(`挪料欠帳_${stamp()}.csv`,csv(
 // ===== 頁籤 =====
 function show(t){stopCam();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));['scan','kit','stock','debt','log','locs'].forEach(k=>$('#v-'+k).classList.toggle('hide',k!==t))}
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(b.dataset.t)});
-function refresh(){renderScan();renderStock();renderDebt();renderLog();renderLocs();renderWoDl()}
+function refresh(){renderScan();renderStock();renderDebt();renderLog();renderLocs();renderWoDl();renderMach()}
 
 // ===== 啟動 =====
 const saved=store.get('rack_me');
