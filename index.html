@@ -81,7 +81,7 @@ tr.bad td{background:var(--badS)}
 #alert button{margin-top:28px;min-height:64px;min-width:240px;font:inherit;font-size:22px;font-weight:900;border:0;border-radius:12px;background:#fff;color:#a00;cursor:pointer}
 #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:40;background:#0f7b3f;color:#fff;padding:14px 20px;border-radius:12px;font-weight:700;font-size:17px;width:max-content;max-width:92vw;box-shadow:0 6px 20px rgba(0,0,0,.3)}
 #print{display:none}
-@media print{body>*:not(#print){display:none!important}#print{display:grid!important;grid-template-columns:repeat(2,1fr);gap:5mm;color:#000;background:#fff}.lab{border:1px dashed #999;padding:3mm;break-inside:avoid;display:grid;grid-template-columns:30mm 1fr;gap:3mm;align-items:center}.lab .q svg{width:30mm;height:30mm}.lab .bc svg{width:100%;height:9mm}.lab .s{font:900 30pt sans-serif;line-height:1}.lab .c{font:700 12pt sans-serif}.lab .k{font:9pt sans-serif}}
+@media print{body>*:not(#print){display:none!important}#print{display:grid!important;grid-template-columns:repeat(2,1fr);gap:5mm;color:#000;background:#fff}.lab{border:1px dashed #999;padding:3mm;break-inside:avoid;display:grid;grid-template-columns:30mm 1fr;gap:3mm;align-items:center}.lab .q svg{width:30mm;height:30mm}.lab .bc svg{width:100%;height:9mm}.lab .s{font:900 30pt sans-serif;line-height:1;white-space:nowrap}.lab>div{min-width:0;overflow:hidden}.lab .c{font:700 12pt sans-serif}.lab .k{font:9pt sans-serif}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:6.5em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6em;margin-inline-start:-6.5em;color:var(--mute)}.stack td:empty{display:none}}
 </style>
 <script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
@@ -533,7 +533,7 @@ function c128(txt){const cs=[104,...[...txt].map(c=>c.charCodeAt(0)-32)];let s=1
 function qrSvg(t){if(typeof qrcode==='undefined')return '';const q=qrcode(0,'M');q.addData(t);q.make();return q.createSvgTag({cellSize:4,margin:0,scalable:true})}
 $('#printL').addEventListener('click',()=>{const sel=[...document.querySelectorAll('[data-sel]:checked')].map(c=>db.locs[c.dataset.sel]);if(!sel.length)return locMsg('bad','請先勾選要列印的區域');
   $('#print').innerHTML=sel.map(l=>{const sfx=l.type==='zone'&&l.code.includes('-')?l.code.split('-').pop():l.code;
-    return `<div class="lab"><div class="q">${qrSvg(l.code)}</div><div><div class="s">${esc(sfx)}</div><div class="c">${esc(l.code)}</div><div class="bc">${c128(l.code)}</div><div class="k">${LT[l.type]}${l.note?'・'+esc(l.note):''}</div></div></div>`}).join('');
+    return `<div class="lab"><div class="q">${qrSvg(l.code)}</div><div><div class="s" style="font-size:${sfx.length<=4?30:sfx.length<=6?24:18}pt">${esc(sfx)}</div><div class="c">${esc(l.code)}</div><div class="bc">${c128(l.code)}</div><div class="k">${LT[l.type]}${l.note?'・'+esc(l.note):''}</div></div></div>`}).join('');
   window.print()});
 
 // ===== 匯出 =====
