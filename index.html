@@ -74,6 +74,12 @@ tr.bad td{background:var(--badS)}
 #login label{display:block;margin:12px 0 4px;font-weight:700}
 #login .t{width:100%}
 .sync{font-size:12px}
+#alert{position:fixed;inset:0;z-index:50;background:rgba(170,0,0,.94);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#alert.hide{display:none}
+#alert b{font-size:clamp(34px,9vw,56px);line-height:1.1;margin-bottom:16px;font-weight:900}
+#alert p{font-size:clamp(19px,4.8vw,26px);font-weight:700;line-height:1.45;max-width:680px;overflow-wrap:anywhere;margin:0}
+#alert button{margin-top:28px;min-height:64px;min-width:240px;font:inherit;font-size:22px;font-weight:900;border:0;border-radius:12px;background:#fff;color:#a00;cursor:pointer}
+#toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:40;background:#0f7b3f;color:#fff;padding:14px 20px;border-radius:12px;font-weight:700;font-size:17px;width:max-content;max-width:92vw;box-shadow:0 6px 20px rgba(0,0,0,.3)}
 #print{display:none}
 @media print{body>*:not(#print){display:none!important}#print{display:grid!important;grid-template-columns:repeat(2,1fr);gap:5mm;color:#000;background:#fff}.lab{border:1px dashed #999;padding:3mm;break-inside:avoid;display:grid;grid-template-columns:30mm 1fr;gap:3mm;align-items:center}.lab .q svg{width:30mm;height:30mm}.lab .bc svg{width:100%;height:9mm}.lab .s{font:900 30pt sans-serif;line-height:1}.lab .c{font:700 12pt sans-serif}.lab .k{font:9pt sans-serif}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:6.5em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6em;margin-inline-start:-6.5em;color:var(--mute)}.stack td:empty{display:none}}
@@ -208,6 +214,8 @@ tr.bad td{background:var(--badS)}
 </section>
 </main>
 </div>
+<div id="alert" class="hide" role="alertdialog" aria-labelledby="alertMsg"><b>停！有錯誤</b><p id="alertMsg"></p><button id="alertOk">我知道了</button></div>
+<div id="toast" class="hide" role="status"></div>
 <div id="print"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -271,7 +279,9 @@ let mode='recv',st={},outWhole=true;
 const stepsOf=()=>mode==='out'&&outWhole?['from','confirm']:MODES[mode].s;
 const curStep=()=>stepsOf().find(k=>st[k]===undefined);
 function showMsg(c,t){const m=$('#msg');m.className='msg '+c;m.textContent=t}
-function err(t){showMsg('bad',t);beep(false)}
+let alertOn=false,toastT;
+function err(t){showMsg('bad',t);beep(false);try{navigator.vibrate&&navigator.vibrate([300,120,300,120,300])}catch(e){}$('#alertMsg').textContent=t;$('#alert').classList.remove('hide');alertOn=true}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.remove('hide');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.add('hide'),2500)}
 function parseQR(v){const f=v.split('~');if(f.length>=6&&f[3]&&/^\d+$/.test(f[5]))return{bc:f[0],part:f[3],proj:f[7]||'',seiban:f[4],qty:+f[5]};return null}
 
 function renderScan(){
@@ -300,7 +310,7 @@ function renderScan(){
 }
 
 function handle(v){
-  if(busy)return;
+  if(busy||alertOn)return;
   v=String(v).trim();const cs=curStep();
   if(cs==='confirm'){if(!v||v===st.from){st.confirm=true;beep(true);return commit()}return err('請按「確認」，或再掃一次同一區確認')}
   if(!v){if(cs==='qty'&&st.defQty)v=String(st.defQty);else return}
@@ -346,7 +356,7 @@ async function commit(){
     let t=`已記錄：${MODES[mode].n}`;
     t+=rec.whole?` ${rec.from} 共 ${a.length} 項`:` ${r.part} × ${r.qty}${r.from?' 從 '+r.from:''}${r.to?' 到 '+r.to:''}`;
     if(r.debt)t+=`。已記欠帳：${r.woT} 欠 ${r.woF}`;if(r.note)t+=`（${r.note}）`;if(mode==='recv')t+=r.proj?`，請上架到 ${r.proj}`:'，標籤沒有工令';
-    st={};busy=false;showMsg('ok',t);beep(true);
+    st={};busy=false;showMsg('ok',t);beep(true);toast(t);
   }catch(e){busy=false;st={};err('沒有記錄成功：'+e.message+'。請重新掃這一筆')}
   refresh();
 }
@@ -360,6 +370,7 @@ $('#modes').addEventListener('click',e=>{const b=e.target.closest('button');if(!
 $('#scan').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const v=e.target.value;e.target.value='';handle(v)}else if(e.key==='Escape')cancel()});
 function cancel(){st={};$('#scan').value='';showMsg('info','已取消這一筆');renderScan()}
 $('#cancel').addEventListener('click',cancel);
+$('#alertOk').addEventListener('click',()=>{$('#alert').classList.add('hide');alertOn=false;lastCode='';$('#scan').focus()});
 $('#okBtn').addEventListener('click',()=>handle(''));
 $('#outOpt').addEventListener('change',e=>{outWhole=e.target.value==='1';st={};renderScan()});
 
