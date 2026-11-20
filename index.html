@@ -112,6 +112,7 @@ tr.bad td{background:var(--badS)}
 <section id="v-scan" class="grid">
   <div class="card">
     <div class="modes" id="modes"></div>
+    <div class="row hide" id="outOpt" style="margin:-4px 0 10px"></div>
     <div class="steps" id="steps"></div>
     <div class="target hide" id="target"></div>
     <div class="prompt" id="prompt"></div>
@@ -122,7 +123,7 @@ tr.bad td{background:var(--badS)}
     </div>
     <input id="scan" autocomplete="off" enterkeyhint="go" placeholder="條碼槍掃描，或手動輸入後按 Enter">
     <div class="msg info" id="msg">選擇作業後開始掃描。</div>
-    <div class="row"><button class="b s" id="cancel">取消這一筆</button></div>
+    <div class="row"><button class="b p big hide" id="okBtn">確認</button><button class="b s" id="cancel">取消這一筆</button></div>
     <div class="hint" id="locHint"></div>
   </div>
   <div class="card">
@@ -182,11 +183,11 @@ tr.bad td{background:var(--badS)}
     <h2>3. 其他區域與台車</h2>
     <div class="row" style="margin-top:0">
       <input class="t" id="nCode" placeholder="條碼，例如 共用區用 COMMON-01" style="width:14em">
-      <select class="t" id="nType"><option value="zone">工令區</option><option value="common">共用</option><option value="cart">台車</option></select>
+      <select class="t" id="nType"><option value="zone">工令區</option><option value="common">共用</option></select>
       <input class="t" id="nNote" placeholder="說明，例如 C026S0618 料架第2層" style="width:16em">
       <button class="b p" id="addLoc">新增</button>
     </div>
-    <p class="hint">工令區的條碼就是工單號碼。共用區放沒有工令的料；台車條碼例如 CART-01。</p>
+    <p class="hint">工令區的條碼就是工單號碼。共用區放沒有工令的料。</p>
     <div class="msg info hide" id="locMsg"></div>
   </div>
   <div class="card">
@@ -212,7 +213,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const toD=t=>new Date(String(t).replace(' ','T')+'+08:00');
 const fmt=t=>{const d=toD(t);if(isNaN(d))return t;const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`};
 const SEP='\u0001';
-const LT={zone:'工令區',common:'共用',cart:'台車'};
+const LT={zone:'工令區',common:'共用',cart:'台車',recv:'待上架'};
 let me=null,db={locs:[],recs:[],ret:[]},busy=false,lastSync=0;
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const apiReady=()=>/^https:\/\/script\.google\.com\//.test(API_URL);
@@ -253,34 +254,38 @@ const itemsAt=(m,l)=>[...m].filter(([k,q])=>q>0&&k.split(SEP)[0]===l).map(([k,q]
 let ac;function beep(ok){try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=ok?1200:300;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+(ok?.08:.4))}catch(e){}try{navigator.vibrate&&navigator.vibrate(ok?60:[120,80,120])}catch(e){}}
 
 // ===== 掃描流程 =====
-const MODES={in:{n:'上架',d:'來料標籤 → 工令區',s:['part','qty','to']},move:{n:'挪用',d:'區域 → 標籤 → 數量 → 新區域',s:['from','part','qty','to']},cart:{n:'上台車',d:'區域 → 台車',s:['from','to']},out:{n:'領用',d:'區域 → 標籤 → 數量',s:['from','part','qty']}};
-const SL={part:'料號',qty:'數量',from:'從區域',to:'到區域'};
-const PROMPT={part:'請掃描：來料標籤',qty:'請輸入數量',from:'請掃描：來源區域',to:'請掃描：目的區域'};
-let mode='in',st={};
-const curStep=()=>MODES[mode].s.find(k=>st[k]===undefined);
+const MODES={recv:{n:'收料',d:'掃來料標籤',s:['part','qty']},put:{n:'上架',d:'標籤 → 工令區',s:['part','qty','to']},out:{n:'領用',d:'整區或逐包',s:['from','part','qty']},move:{n:'挪用',d:'區域 → 標籤 → 數量 → 新區域',s:['from','part','qty','to']}};
+const SL={part:'料號',qty:'數量',from:'從區域',to:'到區域',confirm:'確認'};
+const PROMPT={part:'請掃描：來料標籤',qty:'請輸入數量',from:'請掃描：來源區域',to:'請掃描：目的工令區',confirm:'確認整區領用'};
+const RECV='待上架';
+let mode='recv',st={},outWhole=true;
+const stepsOf=()=>mode==='out'&&outWhole?['from','confirm']:MODES[mode].s;
+const curStep=()=>stepsOf().find(k=>st[k]===undefined);
 function showMsg(c,t){const m=$('#msg');m.className='msg '+c;m.textContent=t}
 function err(t){showMsg('bad',t);beep(false)}
 function parseQR(v){const f=v.split('~');if(f.length>=6&&f[3]&&/^\d+$/.test(f[5]))return{bc:f[0],part:f[3],proj:f[7]||'',seiban:f[4],qty:+f[5]};return null}
 
 function renderScan(){
   $('#modes').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${k===mode?'on':''}">${v.n}<small>${v.d}</small></button>`).join('');
-  const cs=curStep();
-  $('#steps').innerHTML=MODES[mode].s.map(k=>{let lb=SL[k];if(mode==='cart'&&k==='to')lb='台車';const v=st[k];
+  const oo=$('#outOpt');oo.classList.toggle('hide',mode!=='out');oo.innerHTML=`<label><input type="radio" name="ow" value="1" ${outWhole?'checked':''}> 整區領用</label><label><input type="radio" name="ow" value="0" ${outWhole?'':'checked'}> 逐包領用</label>`;
+  const cs=curStep();$('#okBtn').classList.toggle('hide',cs!=='confirm');
+  $('#steps').innerHTML=stepsOf().map(k=>{let lb=SL[k];const v=st[k];
     return `<div class="st ${k===cs?'cur':v!==undefined?'done':''}">${lb}<b>${v!==undefined?esc(v):''}</b></div>`}).join('');
   const tg=$('#target');
-  if(mode==='in'&&st.part!==undefined&&cs==='to'){tg.classList.remove('hide');
+  if(mode==='put'&&st.part!==undefined&&cs==='to'){tg.classList.remove('hide');
     if(st.proj){const z=loc(st.proj);tg.innerHTML=`應放到這一區<b>${esc(st.proj)}</b>${z?esc(z.note):'<span class="tag o">這個工令區還沒建立，請管理人員到「料架設定」建立</span>'}`}
     else tg.innerHTML=`這張標籤沒有工令<b>請放共用區或指定區</b>系統會標記為人工指定`}
   else tg.classList.add('hide');
-  let p=PROMPT[cs]||'';if(mode==='cart'&&cs==='to')p='請掃描：台車';if(mode==='cart'&&cs==='from')p='請掃描：要整區推上台車的區域';
+  let p=PROMPT[cs]||'';if(mode==='out'&&outWhole&&cs==='from')p='請掃描：要整區領用的工令區';if(cs==='confirm')p=`確認把 ${st.from} 的 ${itemsAt(stock(),st.from).length} 項全部領用？按「確認」或再掃一次同一區`;
   if(cs==='qty'&&st.defQty)p=`請輸入數量（直接按 Enter = ${st.defQty}）`;
   if(busy)p='上傳中…';
   $('#prompt').textContent=p;
   const s=$('#scan');s.inputMode=cs==='qty'?'numeric':'text';
   const h=$('#locHint'),m=stock();
-  if(st.from&&(mode==='move'||mode==='out')&&cs==='part'){const it=itemsAt(m,st.from);h.innerHTML=it.length?`${esc(st.from)} 現有：`+it.map(x=>`<span class="tag">${esc(x.part)} × ${x.qty}</span>`).join(' '):`${esc(st.from)} 目前是空的`}
+  if(st.from&&(mode==='move'||mode==='out')&&(cs==='part'||cs==='confirm')){const it=itemsAt(m,st.from);h.innerHTML=it.length?`${esc(st.from)} 現有：`+it.map(x=>`<span class="tag">${esc(x.part)} × ${x.qty}</span>`).join(' '):`${esc(st.from)} 目前是空的`}
   else if(cs==='qty'&&st.from)h.textContent=`${st.from} 的 ${st.part} 現有 ${qtyAt(m,st.from,st.part)} 個`;
-  else if(cs==='part'&&mode==='in')h.textContent='掃來料標籤上的 QR Code，料號、數量、工令會自動帶入，畫面會告訴你該放哪一區。';
+  else if(cs==='part'&&mode==='recv')h.textContent='倉庫清點時掃來料標籤上的 QR Code，料號、數量、工令自動帶入，系統記為「待上架」。';
+  else if(cs==='part'&&mode==='put')h.textContent='掃已收料的來料標籤，畫面會告訴你該放哪一區，再掃那一區的標籤。';
   else h.textContent='';
   renderRecent();
 }
@@ -288,6 +293,7 @@ function renderScan(){
 function handle(v){
   if(busy)return;
   v=String(v).trim();const cs=curStep();
+  if(cs==='confirm'){if(!v||v===st.from){st.confirm=true;beep(true);return commit()}return err('請按「確認」，或再掃一次同一區確認')}
   if(!v){if(cs==='qty'&&st.defQty)v=String(st.defQty);else return}
   const Q=parseQR(v);
   if(Q&&cs!=='part')return err('這一步不是掃來料標籤，請看上方提示');
@@ -297,10 +303,11 @@ function handle(v){
     if(L)return err(`「${v}」是區域標籤，這一步要掃來料標籤`);
     if((mode==='move'||mode==='out')&&qtyAt(m,st.from,v)<=0)return err(`${st.from} 沒有 ${v}，請確認是不是拿錯區`);
     if(Q){
-      if(mode==='in'){const d=db.recs.find(r=>r.bc===Q.bc&&r.m==='in');if(d)return err(`這張標籤已經在 ${fmt(d.t)} 由 ${d.op} 上架到 ${d.to}，不要重複上架`);st.qty=Q.qty}
+      if(mode==='recv'){const d=db.recs.find(r=>r.bc===Q.bc&&r.m==='recv');if(d)return err(`這張標籤已經在 ${fmt(d.t)} 由 ${d.op} 收料過`);st.qty=Q.qty}
+      else if(mode==='put'){if(!db.recs.some(r=>r.bc===Q.bc&&r.m==='recv'))return err('這包還沒收料，請先切到「收料」掃描');const d=db.recs.find(r=>r.bc===Q.bc&&r.m==='put');if(d)return err(`這張標籤已經在 ${fmt(d.t)} 由 ${d.op} 上架到 ${d.to}`);st.from=RECV;st.qty=Q.qty}
       else st.defQty=Math.min(Q.qty,qtyAt(m,st.from,v));
       st.bc=Q.bc;st.proj=Q.proj;
-    }else{if(st.from)st.defQty=qtyAt(m,st.from,v);st.proj=''}
+    }else{if(mode==='put'){if(qtyAt(m,RECV,v)<=0)return err(`待上架區沒有 ${v}，請先收料`);st.from=RECV}if(st.from)st.defQty=qtyAt(m,st.from,v);st.proj=''}
     st.part=v;
   }else if(cs==='qty'){
     if(L)return err('這一步要輸入數量，不是掃區域');
@@ -309,13 +316,12 @@ function handle(v){
     st.qty=n;
   }else{
     if(!L)return err(`找不到區域「${v}」。新區域請管理人員先在「料架設定」建立`);
-    if(cs==='from'){if(mode==='cart'&&L.type==='cart')return err('來源要掃料架區域，不是台車');if(!itemsAt(m,v).length)return err(`${v} 目前沒有任何料`)}
+    if(cs==='from'){if(!itemsAt(m,v).length)return err(`${v} 目前沒有任何料`)}
     if(cs==='to'){
       if(v===st.from)return err('來源和目的是同一區');
-      if(mode==='cart'&&L.type!=='cart')return err('目的要掃台車');
-      if(mode!=='cart'&&L.type==='cart')return err(mode==='in'?'上架要放到料架區，不是台車':'要推上台車請用「上台車」');
-      if(mode==='in'&&L.type==='zone'&&st.proj&&L.wo!==st.proj)return err(`放錯區！這包屬於 ${st.proj}，你掃的是 ${v}。請放到 ${st.proj} 區`);
-      if(mode==='in'&&L.type!=='zone'&&st.proj&&loc(st.proj))return err(`這包屬於 ${st.proj}，該工令區已經建立，請放到 ${st.proj} 區，不要放${LT[L.type]}區`);
+      if(L.type==='cart'||L.type==='recv')return err('請掃料架上的區域');
+      if(mode==='put'&&L.type==='zone'&&st.proj&&L.wo!==st.proj)return err(`放錯區！這包屬於 ${st.proj}，你掃的是 ${v}。請放到 ${st.proj} 區`);
+      if(mode==='put'&&L.type!=='zone'&&st.proj&&loc(st.proj))return err(`這包屬於 ${st.proj}，該工令區已經建立，請放到 ${st.proj} 區，不要放${LT[L.type]}區`);
     }
     st[cs]=v;
   }
@@ -325,12 +331,12 @@ function handle(v){
 
 async function commit(){
   busy=true;renderScan();showMsg('info','上傳中…');
-  const rec={m:mode,part:st.part||'',qty:st.qty||0,from:st.from||'',to:st.to||'',bc:st.bc||'',proj:st.proj||''};
+  const rec={m:mode,part:st.part||'',qty:st.qty||0,from:st.from||'',to:st.to||'',bc:st.bc||'',proj:st.proj||'',whole:mode==='out'&&outWhole};
   try{
     const j=await api('add',{rec});const a=j.added||[];const r=a[0]||rec;
     let t=`已記錄：${MODES[mode].n}`;
-    t+=mode==='cart'?` ${rec.from} 共 ${a.length} 項 → ${rec.to}`:` ${r.part} × ${r.qty}${r.from?' 從 '+r.from:''}${r.to?' 到 '+r.to:''}`;
-    if(r.debt)t+=`。已記欠帳：${r.woT} 欠 ${r.woF}`;if(r.note)t+=`（${r.note}）`;
+    t+=rec.whole?` ${rec.from} 共 ${a.length} 項`:` ${r.part} × ${r.qty}${r.from?' 從 '+r.from:''}${r.to?' 到 '+r.to:''}`;
+    if(r.debt)t+=`。已記欠帳：${r.woT} 欠 ${r.woF}`;if(r.note)t+=`（${r.note}）`;if(mode==='recv')t+=r.proj?`，請上架到 ${r.proj}`:'，標籤沒有工令';
     st={};busy=false;showMsg('ok',t);beep(true);
   }catch(e){busy=false;st={};err('沒有記錄成功：'+e.message+'。請重新掃這一筆')}
   refresh();
@@ -345,6 +351,8 @@ $('#modes').addEventListener('click',e=>{const b=e.target.closest('button');if(!
 $('#scan').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const v=e.target.value;e.target.value='';handle(v)}else if(e.key==='Escape')cancel()});
 function cancel(){st={};$('#scan').value='';showMsg('info','已取消這一筆');renderScan()}
 $('#cancel').addEventListener('click',cancel);
+$('#okBtn').addEventListener('click',()=>handle(''));
+$('#outOpt').addEventListener('change',e=>{outWhole=e.target.value==='1';st={};renderScan()});
 
 async function undo(b,btn){
   if(btn.dataset.c!=='1'){btn.dataset.c='1';const o=btn.textContent;btn.textContent='再按一次確認';setTimeout(()=>{btn.dataset.c='';btn.textContent=o},3000);return}
@@ -386,9 +394,9 @@ async function kit(){
     <div class="kpis"><div class="kpi"><b>${R.filter(r=>r.inBom).length}</b><span>料況表品項</span></div><div class="kpi"><b>${iss}</b><span>均華已發料</span></div>
     <div class="kpi ${miss?'bad':'ok'}"><b>${miss}</b><span>已發但架上找不到</span></div><div class="kpi"><b>${un}</b><span>均華還沒發（缺料）</span></div>${ex?`<div class="kpi"><b>${ex}</b><span>架上有但不在料況</span></div>`:''}</div>
     <label><input type="checkbox" id="kOnly" checked> 只看「已發但架上找不到」</label>
-    <div class="scroll" style="margin-top:8px"><table class="stack"><thead><tr><th>料號</th><th>說明</th><th class="n">均華已領</th><th class="n">架上</th><th class="n">已上台車</th><th class="n">已領用</th><th class="n">被挪走</th><th class="n">借入</th><th class="n">差異</th><th class="n">未發</th></tr></thead>
-    <tbody>${R.map(r=>`<tr class="${r.diff>0?'bad':''}" data-d="${r.diff>0?1:0}"><td>${esc(r.part)}${r.inBom?'':' <span class="tag y">不在料況</span>'}</td><td>${esc(r.desc)}</td><td class="n">${r.issued}</td><td class="n">${r.shelf}</td><td class="n">${r.cart||''}</td><td class="n">${r.used||''}</td><td class="n">${r.lent||''}</td><td class="n">${r.borrowed||''}</td><td class="n"><b>${r.diff}</b></td><td class="n">${r.unissued||''}</td></tr>`).join('')}</tbody></table></div>
-    <p class="hint">差異 = 均華已領 −（架上＋已上台車＋已領用＋被挪走−借入）。差異大於 0 代表均華已經發給我們，但系統裡找不到，可能是還沒掃上架、放錯區或遺失。剛開始使用時，請先把現有的料全部掃一次上架。</p>`;
+    <div class="scroll" style="margin-top:8px"><table class="stack"><thead><tr><th>料號</th><th>說明</th><th class="n">均華已領</th><th class="n">架上</th><th class="n">待上架</th><th class="n">已領用</th><th class="n">被挪走</th><th class="n">借入</th><th class="n">差異</th><th class="n">未發</th></tr></thead>
+    <tbody>${R.map(r=>`<tr class="${r.diff>0?'bad':''}" data-d="${r.diff>0?1:0}"><td>${esc(r.part)}${r.inBom?'':' <span class="tag y">不在料況</span>'}</td><td>${esc(r.desc)}</td><td class="n">${r.issued}</td><td class="n">${r.shelf}</td><td class="n">${r.pending||''}</td><td class="n">${r.used||''}</td><td class="n">${r.lent||''}</td><td class="n">${r.borrowed||''}</td><td class="n"><b>${r.diff}</b></td><td class="n">${r.unissued||''}</td></tr>`).join('')}</tbody></table></div>
+    <p class="hint">差異 = 均華已領 −（架上＋待上架＋已領用＋被挪走−借入）。差異大於 0 代表均華已經發給我們，但系統裡找不到，可能是還沒掃上架、放錯區或遺失。剛開始使用時，請先把現有的料全部掃一次上架。</p>`;
     const f=()=>{const on=$('#kOnly').checked;o.querySelectorAll('tbody tr').forEach(tr=>tr.classList.toggle('hide',on&&tr.dataset.d!=='1'))};$('#kOnly').addEventListener('change',f);f();
   }catch(e){o.innerHTML=`<div class="msg bad">${esc(e.message)}</div>`}
 }
@@ -430,7 +438,7 @@ $('#logT').addEventListener('click',e=>{const b=e.target.dataset.undo;if(b)undo(
 function locMsg(c,t){const m=$('#locMsg');m.className='msg '+c;m.textContent=t}
 function renderLocs(){if(me?.role!=='admin')return;const m=stock(),f=$('#lf').value.trim().toUpperCase();
   $('#bomInfo').textContent=db.bomFile?`目前：${db.bomFile}，匯入於 ${db.bomTime}`:'目前尚未匯入。';
-  const L=db.locs.map((l,i)=>({l,i})).filter(x=>!f||x.l.code.includes(f)||(x.l.note||'').toUpperCase().includes(f));
+  const L=db.locs.map((l,i)=>({l,i})).filter(x=>x.l.type!=='recv').filter(x=>!f||x.l.code.includes(f)||(x.l.note||'').toUpperCase().includes(f));
   $('#locT').innerHTML=L.slice(0,400).map(({l,i})=>`<tr><td><input type="checkbox" data-sel="${i}" aria-label="選取 ${esc(l.code)}"></td><td><b>${esc(l.code)}</b></td><td>${LT[l.type]}</td><td><input class="t" style="width:100%;min-height:38px" data-note="${esc(l.code)}" value="${esc(l.note)}"></td><td>${itemsAt(m,l.code).length}</td><td><button class="b s r" data-del="${esc(l.code)}">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚未建立區域</td></tr>'}
 $('#lf').addEventListener('input',renderLocs);
 $('#locT').addEventListener('change',async e=>{const c=e.target.dataset.note;if(c===undefined)return;try{await api('setLoc',{code:c,note:e.target.value});locMsg('ok',`${c} 的說明已更新`)}catch(x){locMsg('bad',x.message)}});
