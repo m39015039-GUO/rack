@@ -273,7 +273,9 @@ function stock(){const m=new Map();const add=(l,p,q)=>{if(!l)return;const k=l+SE
 const qtyAt=(m,l,p)=>m.get(l+SEP+p)||0;
 const itemsAt=(m,l)=>[...m].filter(([k,q])=>q>0&&k.split(SEP)[0]===l).map(([k,q])=>({part:k.split(SEP)[1],qty:q}));
 
-let ac;function beep(ok){try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=ok?1200:300;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+(ok?.08:.4))}catch(e){}try{navigator.vibrate&&navigator.vibrate(ok?60:[120,80,120])}catch(e){}}
+let ac;const unlockAudio=()=>{try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state!=='running')ac.resume();const b=ac.createBuffer(1,1,22050),s=ac.createBufferSource();s.buffer=b;s.connect(ac.destination);s.start(0)}catch(e){}};
+['pointerdown','touchend','keydown'].forEach(t=>document.addEventListener(t,unlockAudio,{capture:true,passive:true}));
+function beep(ok){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state!=='running')ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=ok?1200:300;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+(ok?.08:.4))}catch(e){}try{navigator.vibrate&&navigator.vibrate(ok?60:[120,80,120])}catch(e){}}
 
 // ===== 掃描流程 =====
 const MODES={recv:{n:'收料',d:'掃來料標籤',s:['part','qty']},put:{n:'上架',d:'標籤 → 工令區',s:['part','qty','to']},out:{n:'領用',d:'整區或逐包',s:['from','part','qty']},move:{n:'挪用',d:'區域 → 標籤 → 數量 → 新區域',s:['from','part','qty','to']},bind:{n:'綁料架',d:'料架號 → 工令區（連續掃）',s:['rack','to']}};
