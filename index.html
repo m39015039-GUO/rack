@@ -81,7 +81,7 @@ tr.bad td{background:var(--badS)}
 #alert button{margin-top:28px;min-height:64px;min-width:240px;font:inherit;font-size:22px;font-weight:900;border:0;border-radius:12px;background:#fff;color:#a00;cursor:pointer}
 #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:40;background:#0f7b3f;color:#fff;padding:14px 20px;border-radius:12px;font-weight:700;font-size:17px;width:max-content;max-width:92vw;box-shadow:0 6px 20px rgba(0,0,0,.3)}
 #print{display:none}
-@media print{body>*:not(#print){display:none!important}#print{display:grid!important;grid-template-columns:repeat(2,1fr);gap:5mm;color:#000;background:#fff}.lab{border:1px dashed #999;padding:3mm;break-inside:avoid;display:grid;grid-template-columns:30mm 1fr;gap:3mm;align-items:center}.lab .q svg{width:30mm;height:30mm}.lab .bc svg{width:100%;height:9mm}.lab .s{font:900 30pt sans-serif;line-height:1;white-space:nowrap}.lab>div{min-width:0;overflow:hidden}.lab .c{font:700 12pt sans-serif}.lab .k{font:9pt sans-serif}}
+@media print{body>*:not(#print){display:none!important}#print{display:grid!important;grid-template-columns:repeat(2,1fr);gap:5mm;color:#000;background:#fff}.lab{border:1px dashed #999;padding:3mm;break-inside:avoid;display:grid;grid-template-columns:30mm 1fr;gap:3mm;align-items:center}.lab .q svg{width:30mm;height:30mm}.lab .bc svg{width:100%;height:9mm}.lab .s{font:900 30pt sans-serif;line-height:1;white-space:nowrap}.lab>div{min-width:0;overflow:hidden}.lab .c{font:700 12pt sans-serif}.lab .k{font:9pt sans-serif}#print.signs{display:block!important}.sign{height:235mm;display:flex;flex-direction:column;align-items:center;justify-content:center;break-after:page;text-align:center}.sign .n{font:900 190pt sans-serif;line-height:1;white-space:nowrap}.sign .sq svg{width:45mm;height:45mm;margin-top:12mm}.sign .sk{font:14pt sans-serif;margin-top:4mm}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:6.5em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6em;margin-inline-start:-6.5em;color:var(--mute)}.stack td:empty{display:none}}
 </style>
 <script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
@@ -154,7 +154,7 @@ tr.bad td{background:var(--badS)}
   <div class="row" style="margin-top:0"><input class="t" id="q" placeholder="料號、區域、工令，或標籤 BCode" style="flex:1 1 240px"><button class="b" id="qScan">掃描查詢</button><button class="b" id="expStock">匯出 CSV</button></div>
   <div id="stockCam" style="margin-top:10px"></div>
   <div class="sum" id="stockSum"></div>
-  <table class="stack"><thead><tr><th>區域</th><th>類型</th><th>工令</th><th>料號</th><th class="n">數量</th></tr></thead><tbody id="stockT"></tbody></table>
+  <table class="stack"><thead><tr><th>區域</th><th>料架</th><th>類型</th><th>工令</th><th>料號</th><th class="n">數量</th></tr></thead><tbody id="stockT"></tbody></table>
 </section>
 
 <section id="v-debt" class="card hide">
@@ -206,10 +206,15 @@ tr.bad td{background:var(--badS)}
     <div class="msg info hide" id="locMsg"></div>
   </div>
   <div class="card">
+    <h2>5. 料架號碼牌</h2>
+    <p class="hint" style="margin-top:0">料架編號用一個英文字母加三碼數字，例如 A001。一張 A4 印一個號碼，貼在料架頂端；下方的 QR Code 給「綁料架」掃描用。印好後到「掃描 → 綁料架」，先掃號碼牌，再連續掃這座料架上的工令區標籤。</p>
+    <div class="row" style="margin-top:0">區碼 <input class="t w" id="rZ" value="A" maxlength="1"> 從 <input class="t w" id="rA" type="number" value="1"> 到 <input class="t w" id="rB" type="number" value="10"> <button class="b p" id="rPrint">列印號碼牌</button></div>
+  </div>
+  <div class="card">
     <div class="row" style="margin-top:0;justify-content:space-between"><h2 style="margin:0">區域清單</h2>
       <span class="row" style="margin:0"><input class="t" id="lf" placeholder="篩選" style="width:10em"><button class="b" id="selAll">全選</button><button class="b p" id="printL">列印勾選的標籤</button></span></div>
     <p class="hint">說明欄改完離開欄位就會存檔，可以寫實體位置，例如「C026S0618 料架第 2 層」。標籤同時印 QR Code（手機掃）和一維條碼（條碼槍掃），請在電腦上列印。</p>
-    <table class="stack"><thead><tr><th></th><th>條碼</th><th>類型</th><th>說明</th><th>品項</th><th></th></tr></thead><tbody id="locT"></tbody></table>
+    <table class="stack"><thead><tr><th></th><th>條碼</th><th>類型</th><th>料架</th><th>說明</th><th>品項</th><th></th></tr></thead><tbody id="locT"></tbody></table>
   </div>
 </section>
 </main>
@@ -257,7 +262,7 @@ $('#loginF').addEventListener('submit',async e=>{e.preventDefault();const m=$('#
     if(!j.ok)throw new Error(j.err);me={name,token:j.token,role:j.me.role};apply(j);store.set('rack_me',me);enter()}
   catch(x){m.className='msg bad';m.textContent=x.message;me=null}});
 function enter(){$('#login').classList.add('hide');$('#app').classList.remove('hide');$('#meName').innerHTML=`${esc(me.name)} <span class="tag ${me.role==='admin'?'o':''}">${me.role==='admin'?'管理':'作業'}</span>`;
-  document.querySelectorAll('.adm').forEach(x=>x.classList.toggle('hide',me.role!=='admin'));refresh()}
+  document.querySelectorAll('.adm').forEach(x=>x.classList.toggle('hide',me.role!=='admin'));mode='recv';st={};refresh()}
 function logout(msg){stopCam();if(me&&!msg)post({act:'logout',token:me.token}).catch(()=>{});store.set('rack_me',null);me=null;$('#app').classList.add('hide');$('#login').classList.remove('hide');const m=$('#lMsg');m.className='msg '+(msg?'bad':'info hide');m.textContent=msg||''}
 $('#logout').addEventListener('click',()=>logout());
 $('#reload').addEventListener('click',sync);
@@ -271,11 +276,12 @@ const itemsAt=(m,l)=>[...m].filter(([k,q])=>q>0&&k.split(SEP)[0]===l).map(([k,q]
 let ac;function beep(ok){try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=ok?1200:300;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+(ok?.08:.4))}catch(e){}try{navigator.vibrate&&navigator.vibrate(ok?60:[120,80,120])}catch(e){}}
 
 // ===== 掃描流程 =====
-const MODES={recv:{n:'收料',d:'掃來料標籤',s:['part','qty']},put:{n:'上架',d:'標籤 → 工令區',s:['part','qty','to']},out:{n:'領用',d:'整區或逐包',s:['from','part','qty']},move:{n:'挪用',d:'區域 → 標籤 → 數量 → 新區域',s:['from','part','qty','to']}};
-const SL={part:'料號',qty:'數量',from:'從區域',to:'到區域',confirm:'確認'};
-const PROMPT={part:'請掃描：來料標籤',qty:'請輸入數量',from:'請掃描：來源區域',to:'請掃描：目的工令區',confirm:'確認整區領用'};
+const MODES={recv:{n:'收料',d:'掃來料標籤',s:['part','qty']},put:{n:'上架',d:'標籤 → 工令區',s:['part','qty','to']},out:{n:'領用',d:'整區或逐包',s:['from','part','qty']},move:{n:'挪用',d:'區域 → 標籤 → 數量 → 新區域',s:['from','part','qty','to']},bind:{n:'綁料架',d:'料架號 → 工令區（連續掃）',s:['rack','to']}};
+const SL={part:'料號',qty:'數量',from:'從區域',to:'到區域',confirm:'確認',rack:'料架'};
+const PROMPT={rack:'請掃描：料架號碼牌',part:'請掃描：來料標籤',qty:'請輸入數量',from:'請掃描：來源區域',to:'請掃描：目的工令區',confirm:'確認整區領用'};
 const RECV='待上架';
-let mode='recv',st={},outWhole=true;
+let mode='recv',st={},outWhole=true,bindReplace=false;
+const rk=c=>(loc(c)?.racks||[]).join('、');
 const stepsOf=()=>mode==='out'&&outWhole?['from','confirm']:MODES[mode].s;
 const curStep=()=>stepsOf().find(k=>st[k]===undefined);
 function showMsg(c,t){const m=$('#msg');m.className='msg '+c;m.textContent=t}
@@ -285,17 +291,17 @@ function toast(t){const e=$('#toast');e.textContent=t;e.classList.remove('hide')
 function parseQR(v){const f=v.split('~');if(f.length>=6&&f[3]&&/^\d+$/.test(f[5]))return{bc:f[0],part:f[3],proj:f[7]||'',seiban:f[4],qty:+f[5]};return null}
 
 function renderScan(){
-  $('#modes').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${k===mode?'on':''}">${v.n}<small>${v.d}</small></button>`).join('');
-  const oo=$('#outOpt');oo.classList.toggle('hide',mode!=='out');oo.innerHTML=`<label><input type="radio" name="ow" value="1" ${outWhole?'checked':''}> 整區領用</label><label><input type="radio" name="ow" value="0" ${outWhole?'':'checked'}> 逐包領用</label>`;
+  $('#modes').innerHTML=Object.entries(MODES).filter(([k])=>k!=='bind'||me?.role==='admin').map(([k,v])=>`<button data-m="${k}" class="${k===mode?'on':''}">${v.n}<small>${v.d}</small></button>`).join('');
+  const oo=$('#outOpt');oo.classList.toggle('hide',mode!=='out'&&mode!=='bind');oo.innerHTML=mode==='bind'?`<label><input type="radio" name="bw" value="0" ${bindReplace?'':'checked'}> 加入這座（工令區跨多座料架）</label><label><input type="radio" name="bw" value="1" ${bindReplace?'checked':''}> 只放這座（工令區搬家）</label>`:`<label><input type="radio" name="ow" value="1" ${outWhole?'checked':''}> 整區領用</label><label><input type="radio" name="ow" value="0" ${outWhole?'':'checked'}> 逐包領用</label>`;
   const cs=curStep();$('#okBtn').classList.toggle('hide',cs!=='confirm');
   $('#steps').innerHTML=stepsOf().map(k=>{let lb=SL[k];const v=st[k];
     return `<div class="st ${k===cs?'cur':v!==undefined?'done':''}">${lb}<b>${v!==undefined?esc(v):''}</b></div>`}).join('');
   const tg=$('#target');
   if(mode==='put'&&st.part!==undefined&&cs==='to'){tg.classList.remove('hide');
-    if(st.proj){const z=loc(st.proj);tg.innerHTML=`應放到這一區<b>${esc(st.proj)}</b>${z?esc(z.note):'<span class="tag o">這個工令區還沒建立，請管理人員到「料架設定」建立</span>'}`}
+    if(st.proj){const z=loc(st.proj);tg.innerHTML=`應放到這一區<b>${z&&z.racks.length?'料架 '+esc(rk(st.proj))+' → ':''}${esc(st.proj)}</b>${z?esc(z.note):'<span class="tag o">這個工令區還沒建立，請管理人員到「料架設定」建立</span>'}`}
     else tg.innerHTML=`這張標籤沒有工令<b>請放共用區或指定區</b>系統會標記為人工指定`}
   else tg.classList.add('hide');
-  let p=PROMPT[cs]||'';if(mode==='out'&&outWhole&&cs==='from')p='請掃描：要整區領用的工令區';if(cs==='confirm')p=`確認把 ${st.from} 的 ${itemsAt(stock(),st.from).length} 項全部領用？按「確認」或再掃一次同一區`;
+  let p=PROMPT[cs]||'';if(mode==='bind'&&cs==='to')p=`料架 ${st.rack}：請掃這座料架上的工令區（可連續掃）`;if(mode==='out'&&outWhole&&cs==='from')p='請掃描：要整區領用的工令區';if(cs==='confirm')p=`確認把 ${st.from} 的 ${itemsAt(stock(),st.from).length} 項全部領用？按「確認」或再掃一次同一區`;
   if(cs==='qty'&&st.defQty)p=`請輸入數量（直接按 Enter = ${st.defQty}）`;
   if(busy)p='上傳中…';
   $('#prompt').textContent=p;
@@ -311,6 +317,10 @@ function renderScan(){
 
 function handle(v){
   if(busy||alertOn)return;
+  if(mode==='bind'){v=String(v).trim();if(!v)return;const R=v.toUpperCase();
+    if(/^[A-Z]\d{3}$/.test(R)){st={rack:R};beep(true);showMsg('info',`料架 ${R}，請掃這座料架上的工令區標籤（可連續掃）`);return renderScan()}
+    if(!st.rack)return err('請先掃料架號碼牌');const Z=loc(v);if(!Z||Z.type==='recv')return err(`找不到區域「${v}」`);
+    busy=true;renderScan();api('setRacks',{code:v,racks:[st.rack],mode:bindReplace?'replace':'add'}).then(j=>{busy=false;const t=`${v} → 料架 ${j.racks.join('、')}`;showMsg('ok',t);toast(t);beep(true);refresh()}).catch(e=>{busy=false;err(e.message);refresh()});return}
   v=String(v).trim();const cs=curStep();
   if(cs==='confirm'){if(!v||v===st.from){st.confirm=true;beep(true);return commit()}return err('請按「確認」，或再掃一次同一區確認')}
   if(!v){if(cs==='qty'&&st.defQty)v=String(st.defQty);else return}
@@ -372,7 +382,7 @@ function cancel(){st={};$('#scan').value='';showMsg('info','已取消這一筆')
 $('#cancel').addEventListener('click',cancel);
 $('#alertOk').addEventListener('click',()=>{$('#alert').classList.add('hide');alertOn=false;lastCode='';$('#scan').focus()});
 $('#okBtn').addEventListener('click',()=>handle(''));
-$('#outOpt').addEventListener('change',e=>{outWhole=e.target.value==='1';st={};renderScan()});
+$('#outOpt').addEventListener('change',e=>{if(e.target.name==='bw'){bindReplace=e.target.value==='1';return renderScan()}outWhole=e.target.value==='1';st={};renderScan()});
 
 async function undo(b,btn){
   if(btn.dataset.c!=='1'){btn.dataset.c='1';const o=btn.textContent;btn.textContent='再按一次確認';setTimeout(()=>{btn.dataset.c='';btn.textContent=o},3000);return}
@@ -410,7 +420,7 @@ async function kit(mach){
     if(!k.found&&!k.rows.length){o.innerHTML=`<div class="msg bad">料況表裡找不到 ${esc(M?machLabel(M):w)} 的工單。請確認工單號碼，或請管理人員匯入最新料況表（目前：${esc(k.bomFile||'尚未匯入')}）。</div>`;return}
     const R=k.rows.sort((a,b)=>b.diff-a.diff||a.part.localeCompare(b.part));
     const iss=R.filter(r=>r.issued>0).length,miss=R.filter(r=>r.diff>0).length,un=R.filter(r=>r.unissued>0).length,ex=R.filter(r=>!r.inBom).length;
-    o.innerHTML=(M?`<div class="target">${esc(M.site)}（${esc(M.jd)}／${esc(M.main)}）<b>出機日 ${esc(M.ship||'未定')}</b>工單：${M.wos.map(esc).join('、')}</div>`:'')+`<p class="hint">料況表：${esc(k.bomFile||'—')}｜工令區：${k.zones.length?k.zones.map(esc).join('、'):'<span class="tag o">尚未建立</span>'}</p>
+    o.innerHTML=(M?`<div class="target">${esc(M.site)}（${esc(M.jd)}／${esc(M.main)}）<b>出機日 ${esc(M.ship||'未定')}</b>工單：${M.wos.map(esc).join('、')}</div>`:'')+`<p class="hint">料況表：${esc(k.bomFile||'—')}｜工令區：${k.zones.length?k.zones.map(z=>esc(z)+(rk(z)?'（料架 '+esc(rk(z))+'）':'')).join('、'):'<span class="tag o">尚未建立</span>'}</p>
     <div class="kpis"><div class="kpi"><b>${R.filter(r=>r.inBom).length}</b><span>料況表品項</span></div><div class="kpi"><b>${iss}</b><span>均華已發料</span></div>
     <div class="kpi ${miss?'bad':'ok'}"><b>${miss}</b><span>已發但架上找不到</span></div><div class="kpi"><b>${un}</b><span>均華還沒發（缺料）</span></div>${ex?`<div class="kpi"><b>${ex}</b><span>架上有但不在料況</span></div>`:''}</div>
     <label><input type="checkbox" id="kOnly" checked> 只看「已發但架上找不到」</label>
@@ -436,9 +446,9 @@ function renderWoDl(){$('#woDl').innerHTML=db.locs.filter(l=>l.type==='zone').ma
 $('#qScan').addEventListener('click',()=>cam&&camTarget==='query'?stopCam():startCam('query'));
 function stockRows(){const m=stock(),q=$('#q').value.trim().toLowerCase();
   return [...m].filter(([,n])=>n>0).map(([k,qty])=>{const[l,p]=k.split(SEP);const L=loc(l);return{l,p,qty,type:LT[L?.type]||'',wo:L?.wo||''}})
-    .filter(r=>!q||[r.l,r.p,r.wo].some(x=>x.toLowerCase().includes(q))).sort((a,b)=>a.l.localeCompare(b.l)||a.p.localeCompare(b.p))}
+    .filter(r=>!q||[r.l,r.p,r.wo,rk(r.l)].some(x=>x.toLowerCase().includes(q))).sort((a,b)=>a.l.localeCompare(b.l)||a.p.localeCompare(b.p))}
 function renderStock(){const q=$('#q').value.trim().toLowerCase();const rows=stockRows();
-  $('#stockT').innerHTML=rows.slice(0,500).map(r=>`<tr><td>${esc(r.l)}</td><td>${r.type}</td><td>${esc(r.wo)}</td><td>${esc(r.p)}</td><td class="n">${r.qty}</td></tr>`).join('')||'<tr><td colspan="5">沒有符合的庫存</td></tr>';
+  $('#stockT').innerHTML=rows.slice(0,500).map(r=>`<tr><td>${esc(r.l)}</td><td>${esc(rk(r.l))}</td><td>${r.type}</td><td>${esc(r.wo)}</td><td>${esc(r.p)}</td><td class="n">${r.qty}</td></tr>`).join('')||'<tr><td colspan="6">沒有符合的庫存</td></tr>';
   const bl=q?[...db.recs].reverse().find(r=>(r.bc||'').toLowerCase()===q):null;
   if(bl){$('#stockSum').innerHTML=`<span class="tag g">標籤 ${esc(bl.bc)}（${esc(bl.part)} × ${bl.qty}）最後一次：${MODES[bl.m]?.n} ${fmt(bl.t)} ${esc(bl.op)} → ${esc(bl.to||'已領用')}</span>`;return}
   if(q){const tot={};rows.forEach(r=>tot[r.p]=(tot[r.p]||0)+r.qty);$('#stockSum').innerHTML=Object.entries(tot).slice(0,30).map(([p,n])=>`<span class="tag">${esc(p)} 合計 ${n}</span>`).join(' ')}else $('#stockSum').innerHTML=''}
@@ -467,10 +477,10 @@ function locMsg(c,t){const m=$('#locMsg');m.className='msg '+c;m.textContent=t}
 function renderLocs(){if(me?.role!=='admin')return;const m=stock(),f=$('#lf').value.trim().toUpperCase();
   $('#bomInfo').textContent=db.bomFile?`目前：${db.bomFile}，匯入於 ${db.bomTime}`:'目前尚未匯入。';
   $('#ordInfo').textContent=db.ordFile?`目前：${db.ordFile}，匯入於 ${db.ordTime}，共 ${db.orders.length} 台`:'目前尚未匯入。';
-  const L=db.locs.map((l,i)=>({l,i})).filter(x=>x.l.type!=='recv').filter(x=>!f||x.l.code.includes(f)||(x.l.note||'').toUpperCase().includes(f));
-  $('#locT').innerHTML=L.slice(0,400).map(({l,i})=>`<tr><td><input type="checkbox" data-sel="${i}" aria-label="選取 ${esc(l.code)}"></td><td><b>${esc(l.code)}</b></td><td>${LT[l.type]}</td><td><input class="t" style="width:100%;min-height:38px" data-note="${esc(l.code)}" value="${esc(l.note)}"></td><td>${itemsAt(m,l.code).length}</td><td><button class="b s r" data-del="${esc(l.code)}">刪除</button></td></tr>`).join('')||'<tr><td colspan="6">尚未建立區域</td></tr>'}
+  const L=db.locs.map((l,i)=>({l,i})).filter(x=>x.l.type!=='recv').filter(x=>!f||x.l.code.includes(f)||(x.l.note||'').toUpperCase().includes(f)||(x.l.racks||[]).join(',').includes(f));
+  $('#locT').innerHTML=L.slice(0,400).map(({l,i})=>`<tr><td><input type="checkbox" data-sel="${i}" aria-label="選取 ${esc(l.code)}"></td><td><b>${esc(l.code)}</b></td><td>${LT[l.type]}</td><td><input class="t" style="width:100%;min-height:38px" data-racks="${esc(l.code)}" value="${esc((l.racks||[]).join(','))}" placeholder="A001,A002"></td><td><input class="t" style="width:100%;min-height:38px" data-note="${esc(l.code)}" value="${esc(l.note)}"></td><td>${itemsAt(m,l.code).length}</td><td><button class="b s r" data-del="${esc(l.code)}">刪除</button></td></tr>`).join('')||'<tr><td colspan="7">尚未建立區域</td></tr>'}
 $('#lf').addEventListener('input',renderLocs);
-$('#locT').addEventListener('change',async e=>{const c=e.target.dataset.note;if(c===undefined)return;try{await api('setLoc',{code:c,note:e.target.value});locMsg('ok',`${c} 的說明已更新`)}catch(x){locMsg('bad',x.message)}});
+$('#locT').addEventListener('change',async e=>{const rc=e.target.dataset.racks;if(rc!==undefined){try{const j=await api('setRacks',{code:rc,racks:e.target.value.split(/[,，、\s]+/).filter(Boolean),mode:'replace'});locMsg('ok',`${rc} 的料架已更新為 ${j.racks.join('、')||'（空白）'}`)}catch(x){locMsg('bad',x.message)}refresh();return}const c=e.target.dataset.note;if(c===undefined)return;try{await api('setLoc',{code:c,note:e.target.value});locMsg('ok',`${c} 的說明已更新`)}catch(x){locMsg('bad',x.message)}});
 $('#locT').addEventListener('click',async e=>{const c=e.target.dataset.del;if(!c)return;if(e.target.dataset.c!=='1'){e.target.dataset.c='1';e.target.textContent='確認刪除';return}
   try{await api('delLoc',{code:c});locMsg('ok',`已刪除 ${c}`)}catch(x){locMsg('bad',x.message)}refresh()});
 async function addLocs(locs){locMsg('info','儲存中…');try{const j=await api('addLocs',{locs});locMsg('ok',`已新增 ${j.n} 個區域`)}catch(x){locMsg('bad',x.message)}refresh()}
@@ -532,15 +542,21 @@ function c128(txt){const cs=[104,...[...txt].map(c=>c.charCodeAt(0)-32)];let s=1
   return `<svg viewBox="0 0 ${x+10} 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${o}</svg>`}
 function qrSvg(t){if(typeof qrcode==='undefined')return '';const q=qrcode(0,'M');q.addData(t);q.make();return q.createSvgTag({cellSize:4,margin:0,scalable:true})}
 $('#printL').addEventListener('click',()=>{const sel=[...document.querySelectorAll('[data-sel]:checked')].map(c=>db.locs[c.dataset.sel]);if(!sel.length)return locMsg('bad','請先勾選要列印的區域');
-  $('#print').innerHTML=sel.map(l=>{const sfx=l.type==='zone'&&l.code.includes('-')?l.code.split('-').pop():l.code;
+  $('#print').className='';$('#print').innerHTML=sel.map(l=>{const sfx=l.type==='zone'&&l.code.includes('-')?l.code.split('-').pop():l.code;
     return `<div class="lab"><div class="q">${qrSvg(l.code)}</div><div><div class="s" style="font-size:${sfx.length<=4?30:sfx.length<=6?24:18}pt">${esc(sfx)}</div><div class="c">${esc(l.code)}</div><div class="bc">${c128(l.code)}</div><div class="k">${LT[l.type]}${l.note?'・'+esc(l.note):''}</div></div></div>`}).join('');
+  window.print()});
+
+$('#rPrint').addEventListener('click',()=>{const z=$('#rZ').value.trim().toUpperCase(),a=+$('#rA').value,b=+$('#rB').value;
+  if(!/^[A-Z]$/.test(z)||!(a>=0&&b>=a&&b<=999&&b-a<300))return locMsg('bad','區碼要一個英文字母，號碼 0～999，一次最多 300 張');
+  const L=[];for(let i=a;i<=b;i++)L.push(z+String(i).padStart(3,'0'));
+  $('#print').className='signs';$('#print').innerHTML=L.map(c=>`<div class="sign"><div class="n">${c}</div><div class="sq">${qrSvg(c)}</div><div class="sk">料架 ${c}</div></div>`).join('');
   window.print()});
 
 // ===== 匯出 =====
 function dl(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
 const csv=rows=>'﻿'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
 const stamp=()=>new Date().toISOString().slice(0,10).replace(/-/g,'');
-$('#expStock').addEventListener('click',()=>dl(`庫存_${stamp()}.csv`,csv([['區域','類型','工令','料號','數量'],...stockRows().map(r=>[r.l,r.type,r.wo,r.p,r.qty])])));
+$('#expStock').addEventListener('click',()=>dl(`庫存_${stamp()}.csv`,csv([['區域','料架','類型','工令','料號','數量'],...stockRows().map(r=>[r.l,rk(r.l),r.type,r.wo,r.p,r.qty])])));
 $('#expDebt').addEventListener('click',()=>dl(`挪料欠帳_${stamp()}.csv`,csv([['挪用時間','料號','數量','被借工令','借用工令','從','到','經手人','狀態'],...debts().map(r=>[r.t,r.part,r.qty,r.woF,r.woT,r.from,r.to,r.op,r.closed?'已歸還':'未歸還'])])));
 
 // ===== 頁籤 =====
