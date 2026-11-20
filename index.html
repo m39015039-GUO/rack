@@ -294,7 +294,7 @@ function parseQR(v){const f=v.split('~');if(f.length>=6&&f[3]&&/^\d+$/.test(f[5]
 
 function renderScan(){
   $('#modes').innerHTML=Object.entries(MODES).filter(([k])=>k!=='bind'||me?.role==='admin').map(([k,v])=>`<button data-m="${k}" class="${k===mode?'on':''}">${v.n}<small>${v.d}</small></button>`).join('');
-  const oo=$('#outOpt');oo.classList.toggle('hide',mode!=='out'&&mode!=='bind');oo.innerHTML=mode==='bind'?`<label><input type="radio" name="bw" value="0" ${bindReplace?'':'checked'}> 加入這座（工令區跨多座料架）</label><label><input type="radio" name="bw" value="1" ${bindReplace?'checked':''}> 只放這座（工令區搬家）</label>`:`<label><input type="radio" name="ow" value="1" ${outWhole?'checked':''}> 整區領用</label><label><input type="radio" name="ow" value="0" ${outWhole?'':'checked'}> 逐包領用</label>`;
+  const oo=$('#outOpt');oo.classList.toggle('hide',mode!=='out'&&mode!=='bind');oo.innerHTML=mode==='bind'?`<label><input type="radio" name="bw" value="0" ${bindReplace?'':'checked'}> 加入這座（工令區跨多座料架）</label><label><input type="radio" name="bw" value="1" ${bindReplace?'checked':''}> 只放這座（工令區搬家）</label>${st.rack?`<button class="b s r" id="clrRack">清空料架 ${st.rack}</button>`:''}`:`<label><input type="radio" name="ow" value="1" ${outWhole?'checked':''}> 整區領用</label><label><input type="radio" name="ow" value="0" ${outWhole?'':'checked'}> 逐包領用</label>`;
   const cs=curStep();$('#okBtn').classList.toggle('hide',cs!=='confirm');
   $('#steps').innerHTML=stepsOf().map(k=>{let lb=SL[k];const v=st[k];
     return `<div class="st ${k===cs?'cur':v!==undefined?'done':''}">${lb}<b>${v!==undefined?esc(v):''}</b></div>`}).join('');
@@ -311,6 +311,7 @@ function renderScan(){
   const h=$('#locHint'),m=stock();
   if(st.from&&(mode==='move'||mode==='out')&&(cs==='part'||cs==='confirm')){const it=itemsAt(m,st.from);h.innerHTML=it.length?`${esc(st.from)} 現有：`+it.map(x=>`<span class="tag">${esc(x.part)} × ${x.qty}</span>`).join(' '):`${esc(st.from)} 目前是空的`}
   else if(cs==='qty'&&st.from)h.textContent=`${st.from} 的 ${st.part} 現有 ${qtyAt(m,st.from,st.part)} 個`;
+  else if(mode==='bind'&&st.rack){const zs=db.locs.filter(l=>(l.racks||[]).includes(st.rack));h.innerHTML=zs.length?`料架 ${esc(st.rack)} 目前的工令區：`+zs.map(l=>`<span class="tag">${esc(l.code)}</span>`).join(' '):`料架 ${esc(st.rack)} 目前沒有綁任何工令區`}
   else if(cs==='part'&&mode==='recv')h.textContent='倉庫清點時掃來料標籤上的 QR Code，料號、數量、工令自動帶入，系統記為「待上架」。';
   else if(cs==='part'&&mode==='put')h.textContent='掃已收料的來料標籤，畫面會告訴你該放哪一區，再掃那一區的標籤。';
   else h.textContent='';
@@ -385,6 +386,9 @@ $('#cancel').addEventListener('click',cancel);
 $('#alertOk').addEventListener('click',()=>{$('#alert').classList.add('hide');alertOn=false;lastCode='';$('#scan').focus()});
 $('#okBtn').addEventListener('click',()=>handle(''));
 $('#outOpt').addEventListener('change',e=>{if(e.target.name==='bw'){bindReplace=e.target.value==='1';return renderScan()}outWhole=e.target.value==='1';st={};renderScan()});
+$('#outOpt').addEventListener('click',async e=>{const b=e.target.closest('#clrRack');if(!b||busy)return;
+  if(b.dataset.c!=='1'){b.dataset.c='1';b.textContent=`確定清空 ${st.rack}？再按一次`;return}
+  busy=true;try{const j=await api('clearRack',{rack:st.rack});busy=false;const t=`料架 ${st.rack} 已解除 ${j.cleared.length} 個工令區`;showMsg('ok',t);toast(t);beep(true);if(j.kept.length)err(`以下工令區還有庫存，沒有解除：${j.kept.join('、')}。請先領用或挪走，再清空。`)}catch(x){busy=false;err(x.message)}refresh()});
 
 async function undo(b,btn){
   if(btn.dataset.c!=='1'){btn.dataset.c='1';const o=btn.textContent;btn.textContent='再按一次確認';setTimeout(()=>{btn.dataset.c='';btn.textContent=o},3000);return}
